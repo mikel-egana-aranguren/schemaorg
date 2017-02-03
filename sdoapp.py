@@ -142,6 +142,11 @@ def getmodiftime():
     global modtime, etagSlug
     if not getInTestHarness():
         slug = SlugEntity.get_by_id("ETagSlug")
+        if not slug:#Occationally memcache will loose the value and result in  becomming Null value
+            systarttime = datetime.datetime.utcnow()
+            tick()
+            setmodiftime(systarttime)#Will store it again
+            slug = SlugEntity.get_by_id("ETagSlug")
         modtime = slug.modtime
         etagSlug = str(slug.slug)
     return modtime
@@ -188,6 +193,11 @@ else: #Ensure clean start for any memcached or ndb store values...
         log.debug("[%s] End of waiting !!!!!!!!!!!" % (getInstanceId(short=True)))
         tick()
         systarttime = memcache.get("SysStart")
+
+    if(not systarttime): #Occationally memcache will loose the value and result in systarttime becomming Null value
+         systarttime = datetime.datetime.utcnow()
+         tick()
+            
     setmodiftime(systarttime)
     
 #################################################
@@ -559,7 +569,7 @@ class ShowUnit (webapp2.RequestHandler):
                 self.write("Defined in the %s.schema.org extension.<br/>" % home)
         self.emitCanonicalURL(node)
 
-        self.BreadCrumbs(node, layers=layers)
+        self.BreadCrumbs(node, layers=ALL_LAYERS)
 
         comment = GetComment(node, layers)
 
@@ -1651,6 +1661,10 @@ class ShowUnit (webapp2.RequestHandler):
         return False
 
     def handleExactTermPage(self, node, layers='core'):
+
+        if node.startswith("http://schema.org/"): #Special case will map full schema URI to the term name
+            node = node[18:]
+
         """Handle with requests for specific terms like /Person, /fooBar. """
         dataext = os.path.splitext(node)
         if dataext[1] in OUTPUTDATATYPES:
